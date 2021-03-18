@@ -263,12 +263,12 @@ struct __threadpool *tpool_create(size_t count)
 
     pool->count = count, pool->jobqueue = jobqueue;
     if ((pool->workers = malloc(count * sizeof(pthread_t)))) {
-        for (int i = 0; i < count; i++) {
+        for (size_t i = 0; i < count; i++) {
             if (pthread_create(&pool->workers[i], NULL, jobqueue_fetch,
                                (void *)jobqueue)) {
-                for (int j = 0; j < i; j++)
+                for (size_t j = 0; j < i; j++)
                     pthread_cancel(pool->workers[j]);
-                for (int j = 0; j < i; j++)
+                for (size_t j = 0; j < i; j++)
                     pthread_join(pool->workers[j], NULL);
                 free(pool->workers);
                 jobqueue_destroy(jobqueue);
@@ -314,9 +314,9 @@ struct __tpool_future *tpool_apply(struct __threadpool *pool,
 int tpool_join(struct __threadpool *pool)
 {
     size_t num_threads = pool->count;
-    for (int i = 0; i < num_threads; i++)
+    for (size_t i = 0; i < num_threads; i++)
         tpool_apply(pool, NULL, NULL);
-    for (int i = 0; i < num_threads; i++)
+    for (size_t i = 0; i < num_threads; i++)
         pthread_join(pool->workers[i], NULL);
     free(pool->workers);
     jobqueue_destroy(pool->jobqueue);
