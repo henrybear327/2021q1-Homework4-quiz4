@@ -27,18 +27,14 @@ int main()
 
     for (int i = 0; i <= PRECISION; i++) {
         bpp_args[i] = i;
-        printf("Before %d\n", i);
         futures[i] = tpool_apply(pool, bpp, (void *)&bpp_args[i]);
-        printf("After %d\n", i);
     }
 
     for (int i = 0; i <= PRECISION; i++) {
-        printf("Before %d\n", i);
         double *result = tpool_future_get(futures[i], 0 /* blocking wait */);
         bpp_sum += *result;
         tpool_future_destroy(futures[i]);
         free(result);
-        printf("After %d\n", i);
     }
 
     tpool_join(pool);

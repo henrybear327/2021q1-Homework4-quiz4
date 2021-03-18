@@ -126,7 +126,6 @@ void *tpool_future_get(struct __tpool_future *future, unsigned int seconds)
                 return NULL;
             }
         } else {
-            printf("FFF\n");
             pthread_cond_wait(&future->cond_finished, &future->mutex); // FFF;
             // pthread_cond_wait(&future->mutex, &future->cond_finished);
             // return NULL;
@@ -230,10 +229,8 @@ static void *jobqueue_fetch(void *queue)
                 pthread_cond_destroy(&task->future->cond_finished);
                 free(task->future);
             } else {
-                printf("KKK\n");
                 task->future->flag |= __FUTURE_FINISHED; // KKK
                 task->future->result = ret_value;
-                printf("LLL\n");
                 pthread_cond_broadcast(&task->future->cond_finished);
                 //pthread_cond_wait(&task->future->cond_finished,
                 //                  &task->future->mutex); // LLL: WA
@@ -301,7 +298,6 @@ struct __tpool_future *tpool_apply(struct __threadpool *pool,
             jobqueue->head = new_head;
         } else {
             jobqueue->head = jobqueue->tail = new_head;
-            printf("HHH\n");
             pthread_cond_broadcast(&jobqueue->cond_nonempty); // HHH;
         }
         pthread_mutex_unlock(&jobqueue->rwlock);
