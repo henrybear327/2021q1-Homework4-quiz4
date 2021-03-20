@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
 
 #include "thread_pool.h"
 
@@ -77,7 +78,7 @@ void *tpool_future_get(struct __tpool_future *future, unsigned int seconds)
 {
     pthread_mutex_lock(&future->mutex);
     /* turn off the timeout bit set previously */
-    future->flag &= ~__FUTURE_TIMEOUT;
+    future->flag &= ~__FUTURE_TIMEOUT; // because you might want to come back again to check the result after the last timeout!
     while ((future->flag & __FUTURE_FINISHED) == 0) { // not finished, let's keep waiting
         if (seconds) {
             struct timespec expire_time;
@@ -113,16 +114,18 @@ static jobqueue_t *jobqueue_create(void)
 static void jobqueue_destroy(jobqueue_t *jobqueue)
 {
     threadtask_t *tmp = jobqueue->head;
-    while (tmp) {
+    while (tmp) { // clean up all tasks
+        assert(1 == 0);
+
         jobqueue->head = jobqueue->head->next;
         pthread_mutex_lock(&tmp->future->mutex);
-        if (tmp->future->flag & __FUTURE_DESTROYED) {
+        if (tmp->future->flag & __FUTURE_DESTROYED) { // future already got requested to be destroyed by caller 
             pthread_mutex_unlock(&tmp->future->mutex);
             pthread_mutex_destroy(&tmp->future->mutex);
             pthread_cond_destroy(&tmp->future->cond_finished);
             free(tmp->future);
         } else {
-            // not destroyed, means that main.c caller are still holding on to the future object!
+            // not destroyed, means that caller is still holding on to the future object!
             // can't free for the caller
             tmp->future->flag |= __FUTURE_CANCELLED;
             pthread_mutex_unlock(&tmp->future->mutex);
@@ -149,12 +152,12 @@ static void *jobqueue_fetch(void *queue)
     threadtask_t *task;
     int old_state; // The previous cancelability type of the thread is returned in the buffer pointed to by oldtype.
 
-    pthread_cleanup_push(__jobqueue_fetch_cleanup, (void *)&jobqueue->rwlock); // kind of like defer -> unlocks the rwlock
+    pthread_cleanup_push(__jobqueue_fetch_cleanup, (void *)&jobqueue->rwlock); // defer
 
     while (1) {
-        pthread_mutex_lock(&jobqueue->rwlock); // defer guaranteed this will be done
+        pthread_mutex_lock(&jobqueue->rwlock); // defer guaranteed this will be released
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state); 
-        pthread_testcancel(); // Calling  pthread_testcancel()  creates  a  cancellation point within the calling thread, so that a thread that is otherwise executing code that contains no  cancellation  points  will respond to a cancellation request. -> test for cancellation here!
+        pthread_testcancel(); // Calling  pthread_testcancel()  creates  a  cancellation point within the calling thread, so that a thread that is otherwise executing code that contains no  cancellation  points  will respond to a cancellation request.
 
         // should be waiting for a job to show up
         while (!jobqueue->tail) // check tail as we pop from tail
@@ -166,9 +169,9 @@ static void *jobqueue_fetch(void *queue)
             - when the broadcast comes, it's a fight over the rwlock 
             - pthread_cond_wait will always needs to be guarded by a while(boolean expression) since it's blocking here for a condition to happen!
             */
-            pthread_cond_wait(&jobqueue->cond_nonempty, &jobqueue->rwlock); // GGG; WA
+            pthread_cond_wait(&jobqueue->cond_nonempty, &jobqueue->rwlock); // GGG
         
-        // we were waiting, so we allow the thread to be cancelled
+        // we were waiting, so we allowed the thread to be cancelled
         // now we are about to execute code, so we don't like the thread to be cancelled anymore
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
         if (jobqueue->head == jobqueue->tail) { // only one task in queue, we empty the queue
@@ -189,13 +192,14 @@ static void *jobqueue_fetch(void *queue)
             if (task->future->flag & __FUTURE_CANCELLED) { // jobqueue destroyed
                 pthread_mutex_unlock(&task->future->mutex);
                 free(task);
-                continue; // ?? why is this continue? The job queue is already destroyed, waiting at while will be invalid pointer access, no?
+                continue; // ?? why is this continue? The job queue is already destroyed, waiting at while will be invalid pointer access, no? Well actually the code shouldn't even get run.
+                // the jobqueue_destroy will only happen all threads are joined.
             } else {
                 task->future->flag |= __FUTURE_RUNNING;
                 pthread_mutex_unlock(&task->future->mutex);
             }
 
-            void *ret_value = task->func(task->arg); // ?? we might be executing when future is already destroyed, right?
+            void *ret_value = task->func(task->arg);  // ?? should move it into else since in the if clause it is a waste of time to run.
             pthread_mutex_lock(&task->future->mutex);
             if (task->future->flag & __FUTURE_DESTROYED) {
                 pthread_mutex_unlock(&task->future->mutex);
@@ -222,7 +226,7 @@ static void *jobqueue_fetch(void *queue)
         }
     }
 
-    pthread_cleanup_pop(0); // execute the defer function
+    pthread_cleanup_pop(0); // pop the defer function WITHOUT executing it: The pthread_cleanup_pop() function removes the routine at the top of the stack of clean-up handlers, and optionally executes it if execute is nonzero.
     pthread_exit(NULL);
     /*
     The  pthread_exit()  function  terminates the calling thread and returns a value via retval that (if the thread is joinable) is available to another thread in the  same  process  that calls pthread_join(3).
