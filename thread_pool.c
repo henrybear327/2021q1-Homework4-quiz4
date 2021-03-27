@@ -10,8 +10,8 @@ enum __future_flags {
     __FUTURE_RUNNING = 01,
     __FUTURE_FINISHED = 02,
     __FUTURE_TIMEOUT = 04,
-    __FUTURE_CANCELLED = 010, // 8 + __FUTURE_FINISHED
-    __FUTURE_DESTROYED = 020, // 16 + __FUTURE_TIMEOUT 
+    __FUTURE_CANCELLED = 010, // 8
+    __FUTURE_DESTROYED = 020, // 16
 };
 
 typedef struct __threadtask {
