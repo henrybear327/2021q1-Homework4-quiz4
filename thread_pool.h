@@ -36,5 +36,3 @@ void *tpool_future_get(tpool_future_t future, unsigned int seconds);
  * a future object does not prevent a pending task from being executed.
  */
 int tpool_future_destroy(tpool_future_t future);
-
-

@@ -195,7 +195,7 @@ static void *jobqueue_fetch(void *queue)
                 task->future->flag |= __FUTURE_FINISHED; // KKK
                 task->future->result = ret_value;
                 pthread_cond_broadcast(&task->future->cond_finished);
-                //pthread_cond_wait(&task->future->cond_finished,
+                // pthread_cond_wait(&task->future->cond_finished,
                 //                  &task->future->mutex); // LLL: WA
                 pthread_mutex_unlock(&task->future->mutex);
             }
@@ -261,6 +261,10 @@ struct __tpool_future *tpool_apply(struct __threadpool *pool,
             jobqueue->head = new_head;
         } else {
             jobqueue->head = jobqueue->tail = new_head;
+
+            // Need to use broadcast, otherwise the thread the went blocking on the
+            // conditional variable might not be woken up anymore!
+            // pthread_cond_signal(&jobqueue->cond_nonempty); // HHH;
             pthread_cond_broadcast(&jobqueue->cond_nonempty); // HHH;
         }
         pthread_mutex_unlock(&jobqueue->rwlock);
